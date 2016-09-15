@@ -1,0 +1,251 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[bottom=2cm,top=2cm,left=2cm,right=2cm]{geometry}
+\usepackage[portuguese]{babel}
+%Em Windows
+%\usepackage[latin1]{inputenc}
+%\usepackage[T1]{fontenc}
+
+%Em Linux
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{multicol}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{subfigure}
+\usepackage{url}
+\usepackage{todonotes}
+
+\graphicspath{{images/}}
+%Para Mac
+%\usepackage[applemac]{inputenc}
+ 
+\author{Vinicius Graciano Santos}
+\date{\today}
+\title{Universidade Federal de Minas Gerais \\ Computação Gráfica Avançada \\ Trabalho Prático -- Path Tracing}
+\begin{document}
+\maketitle
+\tableofcontents
+
+\section{Objetivo}
+O objetivo do trabalho é implementar um \textit{path tracer} básico. O programa deve possuir no mínimo as funcionalidas descritas na tabela abaixo.
+\begin{table}[!htpb]
+  \centering
+  \begin{tabular}{l|c}
+    \hline
+    \textbf{Iluminação Direta} & Luzes Puntuais e BRDF de Blinn-Phong \\ \hline
+    \textbf{Iluminação Indireta} & Reflexões e Refrações\\\hline
+    \textbf{Mapeamento de texturas} & Planar (formato PPM)\\\hline
+    \textbf{Textura procedural} & Padrão de tabuleiro\\ \hline
+    \textbf{Descrição das cenas} & Definidas em um arquivo externo\\ \hline
+  \end{tabular}
+  \caption{Funcionalidades básicas}
+  \label{tab:basic}
+\end{table}
+
+Com relação à organização desta documentação, a Seção \ref{sec:methods} apresenta as decisões de implementação e as funcionalidades extras inclusas no trabalho, e a Seção \ref{sec:results} mostra as imagens geradas pelo programa desenvolvido. Por fim, a Seção \ref{sec:instructions} descreve as instruções para compilar o código fonte e executar o \textit{path tracer}.
+
+\section{Metodologia}
+\label{sec:methods}
+\subsection{Path Tracing na GPU}
+O path tracer foi implementado para rodar na GPU utilizando o pipeline gráfico programável da OpenGL. Basicamente, apenas dois triângulos são submetido para a placa gráfica de forma a cobrir totalmente a \textit{viewport} e um \textit{fragment shader} é responsável pelo processo de path tracing durante o estágio de rasterização. Essa metodologia permite que o usuário acompanhe a convergência do algoritmo, já que o valor atual do estimador Monte Carlo pode ser diretamente renderizado em uma janela do sistema operacional.
+
+\textit{Fragment shaders} não suportam métodos recursivos devido a certas limitações do pipeline gráfico. Dessa maneira, foi necessário transformar o \textit{path tracer} em um método iterativo. Felizmente, o algoritmo possui recursão de cauda e logo pode ser facilmente escrito como uma único estrutura de repetição indexada pelo número de vértices no caminho de um raio. 
+
+A maior dificuldade na implementação foi a geração de números aleatórios na GPU e o cálculo do valor esperado das amostras, visto que uma execução de um \textit{fragment shader} não possui realimentação de estados. Dessa maneira, para cada execução do shader, foi necessário renderizar dois mapas de texturas, nos quais o último valor aleatório gerado e a média móvel das amostras foram salvos para cada pixel na imagem. Essas texturas são utilizadas como entradas da próxima execução do shader, realimentando a semente aleatória e o estimador Monte Carlo, respectivamente.
+
+\subsection{Sphere-tracing}
+Para disparar os raios em cada fragmento e identificar os pontos de colisão com os objetos na cena foi implementado um método denominado \textit{sphere-tracing}~\cite{Hart:94}. Nesse contexto, um objeto deve ser descrito como uma função $f:\mathbb{R}^3\mapsto\mathbb{R}$ que mapeia um ponto no espaço para a distância até a superfície do objeto, especificada pelo conjunto $\mathcal{S} = \{x \in \mathbb{R}^3 \,|\, f(x) = 0\}$. Assim, dado o raio $r_0 + tr_d$, sendo $r_0 \in \mathbb{R}^3$ o ponto de origem, $r_d \in \mathbb{R}^3$ uma direção normalizada e $t \in \mathbb{R}$, basta encontrar o valor mínimo para $t$ que leve o raio a interceptar a superfície do objeto, isto é, $$t_{min} = \underset{t}{\arg\min} f(r_0 + tr_d) = 0.$$
+
+O método \textit{sphere-tracing} caminha sobre o raio em incrementos de $f(r_0 + tr_d)$, já que por definição a esfera centrada em $r_0 + tr_d$ de raio $f(r_0 + tr_d)$ garantidamente não contém objeto algum em seu interior, então é possível incrementar o valor de $t$ em $f(r_0 + tr_d)$ sem riscos de colisão. A Figura \ref{fig:spheretrace} ilustra as iterações do algoritmo de um ponto inicial até atingir uma superfície.
+
+\begin{figure}[!htpb]
+  \centering
+  \includegraphics[width=.65\textwidth]{spheretrace.pdf}
+  \caption{Ilustração dos passos do algoritmo sphere-tracing (Fonte: \cite{Keinert:14})}
+  \label{fig:spheretrace}
+\end{figure}
+
+As vantagens do método sphere-tracing sobre as soluções analíticas de interseção entre raios e superfícies são várias. Por exemplo, para encontrar o vetor normal em um ponto $x$ basta normalizar o vetor $\nabla f(x)$, que pode ser aproximado pelo método de diferenças centrais. Além disso, técnicas de modelagem CSG podem ser facilmente implementadas através dos operadores min e max, já que as superfícies são definidas por funções implícitas. Finalmente, não é necessário encontrar a função de distância exata até a superfície que se deseja renderizar, mas apenas um limite superior é requerido pelo método. Com isso, é possível especificar objetos complexos como curvas de alta ordem e até mesmo fractais.
+
+\subsection{Bidirectional Scattering Distribution Functions}
+As seguintes funções de espalhamento dos raios foram implementadas:
+\begin{itemize}
+\item BRDF Difusa, Especular e Blinn-Phong.
+\item BSDF Transmissiva com reflexões internas e totais.
+\end{itemize}
+
+Com exceção da BRDF difusa, todas as BxDFs empregam o \textbf{Efeito Fresnel} a partir da aproximação de Schlick para materiais dielétricos. A figura abaixo mostra diversas esferas renderizadas com esses modelos de espalhamento.
+
+\begin{figure}[!htpb]
+  \centering
+  \subfigure[BRDF Difusa]{\includegraphics[width=.45\textwidth]{sphere-1.jpg}}
+  \subfigure[BRDF Especular]{\includegraphics[width=.45\textwidth]{sphere-2.jpg}}\\
+  \subfigure[BRDF de Blinn-Phong]{\includegraphics[width=.45\textwidth]{sphere-3.jpg}}
+  \subfigure[BTDF Transmissiva]{\includegraphics[width=.45\textwidth]{sphere-4.jpg}}
+  \caption{Esferas renderizadas com diferentes materiais dentro de uma Caixa de Cornell.}
+  \label{fig:spheres}
+\end{figure}
+
+\subsection{Luzes Puntuais e com Área }
+O renderizador permite o uso de luzes puntuais e/ou esféricas para iluminar a cena. Além disso, se a geometria da mesma não for fechada --- por exemplo, como na Caixa de Cornell --- uma luz que encapsula toda a cena (\textit{environment light}) será utilizada para retornar a radiância dos raios que não atingirem objeto algum. A Figura \ref{fig:shadows} mostra duas cenas similares sendo iluminadas por luzes distintas: uma puntual e uma esférica. Perceba como o uso da luz esférica cria uma região de transição suave entre a umbra e a penumbra. 
+
+Luzes com área requerem estratégias mais eficientes de amostragem para que a a eficiência do \textit{path tracer} não seja comprometida. Esses detalhes são discutidos na próxima seção.
+
+\begin{figure}[!htpb]
+  \centering
+  \subfigure[Luz puntual]{\includegraphics[width=.45\textwidth]{shadow-1.jpg}}
+  \subfigure[Luz esférica]{\includegraphics[width=.45\textwidth]{shadow-2.jpg}}
+  \caption{Sombras geradas por diferentes tipos de luzes.}
+  \label{fig:shadows}
+\end{figure}
+
+\subsection{Amostragem por Importância, Roleta Russa e Antialiasing}
+\textit{Amostragem por Importância} consiste em retirar amostras de uma distribuição que seja a mais similar possível à distribuição sendo integrada pelo estimador de Monte Carlo. No  trabalho foram implementadas algumas técnicas que variam de acordo com a BxDF das superfícies e a geometria das luzes. Resumidamente, os seguintes métodos estão inclusos:
+\begin{table}[!htpb]
+  \centering
+  \begin{tabular}{c|l} \hline
+    BRDF Difusa & Cosine-weighted Sampling\\ 
+    BRDF de Blinn-Phong & Half Vector Sampling\\
+    Luz Esférica & Solid Angle Sampling\\ \hline
+  \end{tabular}
+  \caption{Métodos de Amostragem por Importância implementados no renderizador.}
+  \label{tab:importance}
+\end{table}
+
+A \textbf{BRDF difusa} é amostrada de acordo com o Método de Malley: um disco unitário é amostrado uniformemente e a amostra é elevada no eixo perpendicular ao disco até a superfície de uma esfera unitária. Na\textbf{ BRDF de Blinn-Phong}, o \textit{half vector} é amostrado e a direção de entrada é refletida sobre ele para obter uma amostra na direção de saída da luz. O processamento é feito em coordenadas esféricas, cujos ângulos $(\phi, \theta)$ são amostrados de acordo com uma distribuição uniforme e uma de potência (\textit{power distribution}), respectivamente, sendo o último de acordo com o parâmetro $\alpha$ da BRDF.
+
+As \textbf{luzes esféricas} são amostradas baseadas no ângulo sólido formado pela luz e pelo ponto $p$ sobre o qual a equação de iluminação está sendo calculada. Dessa maneira, apenas amostras visíveis em relação a esse ponto serão geradas na esfera. O processo consiste em amostrar uniformemente direções em um cone, com ápice em $p$, que aponta na direção do centro da esfera, e depois projetá-las na esfera com uma operação de \textit{raycast}.
+
+A técnica de \textbf{roleta russa} é utilizada para terminar os raios com maior probabilidade conforme a radiância total do caminho diminui. No entanto, ela é ativada depois das quatro primeiras rebatidas/transmissões da luz, o que garante uma convergência mais rápida da renderização da iluminação direta, reflexões primárias e transparências. Mesmo assim, o caminho máximo de um raio de luz é limitado a 16 vértices, por motivos de eficiência.
+
+Para evitar a subamostragem nas bordas dos objetos, o renderizador escolhe uma posição aleatória dentro de cada pixel antes de iniciar a amostra de um caminho para um raio de luz (o peso do amostrador Monte Carlo é ajustado de acordo). Isso garante que diversas amostras sejam avaliadas dentro de um único pixel, evitando problemas de \textbf{aliasing} nas bordas dos objetos.
+
+Todos os métodos de amostragem por importância foram retirados do livro \textit{Physically-baseD Rendering}~\cite{Pharr:2010}.
+\subsection{Geometria Sólida Construtiva com Operadores Suaves}
+Como todas as superfícies são representadas por funções implícitas, operações de união, interseção e diferença podem ser trivialmente implementadas através dos operadores max e min. Considere duas superfícies $\partial f$ e $\partial g$ representadas pelas funções de distância $f:\mathbb{R}^3\mapsto\mathbb{R}$ e $g:\mathbb{R}^3\mapsto\mathbb{R}$. Assim, para encontrar as superfícies resultantes das operações booleanas basta utilzar o método de sphere-tracing sobre as seguintes funções.
+\begin{table}[!htpb]
+  \centering
+  \begin{tabular}{l|c}
+    $\partial f \cup \partial g$ & $\text{min}(f(x), g(x))$\\\hline
+    $\partial f \cap \partial g$ & $\text{max}(f(x), g(x))$\\\hline
+    $\partial f \setminus \partial g$ & $\text{max}(f(x), -g(x))$\\
+  \end{tabular}
+  \caption{Funções de distância para operações de geometria sólida construtiva.}
+\end{table}
+
+\begin{figure}[!htpb]
+  \centering
+  \includegraphics[width=.5\textwidth]{Csg_tree.png}
+  \caption{Exemplo de geometria sólida construtiva.}
+  \label{fig:csg}
+\end{figure}
+Além disso também é possível substituir as funções min e max por operados suaves como a função \textit{smoothmin}, que é geralmente utilizada para retirar discontinuidades em problemas de otimização que requerem a existência das derivadas por todo o espaço de busca.
+$$\text{smoothmin}(a,b) = -\log(e^{-ka} + e^{-kb})$$
+
+\subsection{Mapeamento Triplanar de Texturas com Filtragem Trilinear}
+O mapeamento de texturas descrito na especificação do trabalho foi alterado para comportar um método conhecido como mapeamento triplanar, que é razoavelmente apropriado para ser utilizado em superfícies genéricas, gerando poucas distorções indesejadas durante mapeamento. A ideia é mapear a textura em um cubo ao redor do objeto e projetá-la sobre a superfície do objeto, de maneira semelhante ao famoso \textit{cube mapping} ou \textit{environment mapping} (Figura \ref{fig:cubemap}). No entanto, a textura é ponderada pela direção da normal no ponto sendo processado. Esse último passo é fundamental e garante que em média as texturas dos diferentes planos serão combinadas de maneira suave de acordo com a curvatura da superfície.
+\begin{figure}[!htpb]
+  \centering
+  \includegraphics[width=.6\textwidth]{cm.jpg}
+  \caption{Environment Mapping.}
+  \label{fig:cubemap}
+\end{figure}
+
+Seja $p$ e $n$ um ponto na superfície e seu respectivo vetor normal e assuma uma função $\text{tex}(u,v) : \mathbb{R}^2 \mapsto \mathbb{R}^3$, sendo a imagem da função a cor (RGB) da \text{tex}tura. Assim, a cor $c$ retornada pelo mapeamento triplanar é definida como
+\begin{align*}
+  c = \frac{n_x\text{tex}(p_y, p_z) + n_y\text{tex}(p_x, p_z) + n_z \text{tex}(p_x, p_y)}{n_x + n_y + n_z}
+\end{align*}
+
+O resultado do mapeamento triplanar é mostrado na Figura \ref{fig:triplanar}. Note como a aplicação da textura respeita de maneira automática a curvatura do objeto. O mapeamento não é satisfatório apenas para o cone ao fundo da cena, visto que existem distorções indesejadas. Para evitar \textit{aliasing} nas texturas, devido ao uso do hardware gráfico, a filtrigem trilinar de texturas foi ativada (filtro bilateral linear com mipmaps). Além disso, o arquivo de entrada foi alterado e os parâmetros de textura da especificação foram removidos. Um novo parâmetro de escala foi adicionado no lugar para variar o tamanho da textura nos objetos.
+
+\begin{figure}[!htpb]
+  \centering
+  \includegraphics[width=.7\textwidth]{texture.jpg}
+  \caption{Mapeamento triplanar para diversos objetos distintos (renderizado no TP1).}
+  \label{fig:triplanar}
+\end{figure}
+\newpage
+\section{Resultados}
+\label{sec:results}
+
+Esta seção apenas lista algumas das imagens geradas a partir do programa desenvolvido. As figuras foram anexadas nas próximas páginas por motivos de espaço. O número de amostras em cada imagem é a quantidade de caminhos avaliados pelo \textit{path tracer} em cada pixel.
+
+\begin{figure}[htpb]
+  \centering
+  \includegraphics[width=.8\textwidth]{result-1.jpg}
+  \caption{Luz branca esférica posicionada acima de três esferas de vidro. Note as sombras e as cáusticas geradas. \textbf{(800x600 pixels -- 3000 amostras -- 18.6 minutos)}}
+\end{figure}
+
+\begin{figure}[htpb]
+  \centering
+  \subfigure[400x300 -- 50 amostras -- 5.82 segundos]{\includegraphics[width=.45\textwidth]{samples-1.jpg}}
+  \subfigure[400x300 -- 200 amostras -- 23.3 segundos]{\includegraphics[width=.45\textwidth]{samples-2.jpg}}
+  \caption{Com poucos segundos de processamento o renderizador consegue sintetizar uma imagem com qualidade razoável. A maior parte do ruído é concentrado nas cáusticas.}
+\end{figure}
+
+\begin{figure}[htpb]
+  \centering
+  \includegraphics[width=.8\textwidth]{result-2.jpg}
+  \caption{Três esferas, uma de vidro e outras duas refletoras, em uma cena com textura procedural. O efeito de \textit{light bleeding} no teto e no solo devido às esferas coloridas refletoras é bem aparente. \textbf{(800x600 -- 2200 amostras -- 14.84 minutos)}}
+\end{figure}
+
+\begin{figure}[htpb]
+  \centering
+  \includegraphics[width=.8\textwidth]{result-3.jpg}
+  \caption{Diversos objetos iluminados com uma luz esférica. Perceba as reflexões do modelo Blinn-Phong e o efeito Fresnel --- particularmente visível no chão. \textbf{(800x600 -- 4150 amostras -- 9.56 minutos)}}
+\end{figure}
+
+\begin{figure}[htpb]
+  \centering
+  \includegraphics[width=.8\textwidth]{result-4.jpg}
+  \caption{Uma superfície representando um \textit{torus-knot}. O modelo foi renderizado usando uma luz puntual e a BRDF de Blinn-Phong. \textbf{(800x600 -- 550 amostras -- 1.82 minutos)}}
+\end{figure}
+
+\begin{figure}[htpb]
+  \centering
+  \includegraphics[width=.8\textwidth]{shadow-2.jpg}
+  \caption{Superfície CSG difusa iluminada por luz esférica. \textbf{(800x600 -- 1300 amostras -- 2.18 minutos)}}
+\end{figure}
+
+\begin{figure}[htpb]
+  \centering
+  \includegraphics[width=.8\textwidth]{result-5.jpg}
+  \caption{Caixa de Cornell com uma esfera de vidro e outra refletora. A transmissão da parede vermelha e as cáusticas do vidro são inclusive renderizadas na superfície da esfera metálica. \textbf{(800x600 -- 2550 amostras -- 17.82 minutos)}}
+\end{figure}
+
+\begin{figure}[htpb]
+  \centering
+  \includegraphics[width=.8\textwidth]{result-6.jpg}
+  \caption{Caixa de Cornell contendo um modelo gerado com operações de geometria sólida construtiva suave. \textbf{(800x600 -- 2640 amostras -- 43.64 minutos)}}
+  \label{fig:csg-2}
+\end{figure}
+
+\newpage
+\section{Instruções para Compilar e Executar}
+\label{sec:instructions}
+
+Para compilar o programa é necessário ter instalado o CMake (versão mínima 3.0.2) e a biblioteca GLEW (OpenGL Extensions). Acesse a raíz do projeto e utilize os comandos abaixo para compilar. Para executá-lo, basta usar o comando \tt{raytracer [entrada] [largura] [altura] [tempo]}.\rm O parâmetro \tt{[entrada]}\rm pode ser um dos arquivos do diretório \tt scenes\rm, enquanto \tt [largura]\rm e \tt [altura]\rm são as dimensões da imagem. O parâmetro \tt [tempo] \rm se não for definido irá ativar a renderização contínua, caso contrário irá renderizar apenas um frame no tempo especificado.
+
+É extremamente recomendado que o programa seja executado em uma máquina relativamente moderna que possua uma placa de vídeo com boa capacidade gráfica.
+
+\begin{verbatim}
+mkdir build
+cd build
+cmake ..
+make
+./raytracer scenes/scene1.in
+./raytracer scenes/scene2.in 800 600
+./raytracer scenes/scene3.in 640 480 10
+\end{verbatim}
+
+\section{Conclusão}
+Neste trabalho foi desenvolvido um \textit{path tracer} que roda iterativamente na GPU e diversas cenas de teste foram renderizadas para verificar o seu funcionamento. O método numérico \textit{sphere-tracing} foi escolhido para determinar as interseções dos raios com os objetos e técnicas de \textit{importance-sampling} foram devidamente empregadas para diminuir o tempo de convergência do estimador Monte Carlo.
+
+De maneira geral, o renderizador desenvolvido consegue sintetizar cenas simples relativamente em pouco tempo (dado um certo nível de ruído) apenas contando com a força bruta da GPU --- o que indica que a técnica de \textit{path tracing}, em um futuro relativamente próximo, poderá até mesmo ser aplicada na área de renderização em tempo real. No entanto, efeitos ópticos mais complexos como cáusticas necessitam de um número elevado de amostras para diminuir o ruído a níveis aceitáveis, o que compromete significativamente o tempo de execução.
+
+Quando comparado ao trabalho anterior (TP1), o aumento na qualidade das imagens é evidente. Além disso, a implementação do \textit{path tracing} na GPU mostrou-se mais simples do que o \textit{raytracing} tradicional, já que o primeiro possui recursão de cauda e pode ser facilmente codificado em um único laço de repetição. Em conclusão, \textit{path tracing} é um método robusto de fácil implementação para avaliar a equação de renderização e sintetizar imagens com efeitos de iluminação global. Como opinião pessoal, acho que não temos motivos para continuar a utilizar o \textit{raytracing} clássico além de motivos históricos e/ou didáticos.
+
+\bibliographystyle{unsrt}
+\bibliography{references}
+\end{document}

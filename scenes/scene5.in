@@ -1,0 +1,17 @@
+5 2 5
+0 -1.7 0
+0 1 0
+45
+0
+3
+texmap blur.ppm 1
+checker 3 3 3 3 3 0 5
+solid 1 1 1
+2
+0 0 0 0 0 0 0
+10 10 10 0 0 0 0
+3
+1 0 polyhedron 1
+  0 1 0 2
+0 0 csg 0 0 0
+2 1 sphere 0 2 0 0.35

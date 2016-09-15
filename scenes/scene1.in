@@ -1,0 +1,30 @@
+1 -8.4  4.44
+1  10  -2
+0   0   1
+35
+0
+6
+solid       .6 .2 .4
+solid        1  1  1
+solid        1  1  1
+solid        1  1  1
+checker     .5 .2 .8    .1 .7 .2    .5
+texmap	     blur.ppm 3
+3
+0  0  0  0  0  0       0
+0  0  0  0  0  1  1.45
+40 40 40 0 0 0 0
+7
+2 1 sphere   3   1  1     1
+1 1 sphere  -1   4  1     1
+3 1 sphere   1  0  1     1
+5 0 polyhedron 2
+     0  0  1 0.01
+	-1  1  0   10
+0 0 polyhedron 2
+	-1 -1  0   10
+	 0 0 -1 5
+4 0 polyhedron 2
+	 1 -1  0   10
+	 1  1  0   10
+1 2 sphere 1 4 3 0.5
