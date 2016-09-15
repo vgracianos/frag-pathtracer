@@ -1,13 +1,19 @@
 # frag-pathtracer
 A (very hacky) path tracer written in a GLSL fragment shader
 
-<div align="center">
-     <img src="https://pbs.twimg.com/media/CUvazvXXIAAzGvS.jpg" style="width:45%;height:auto;" />
-     <img src="https://pbs.twimg.com/media/CUvazu8WEAE7Szw.jpg" style="width:45%;height:auto;" />
+<div style="text-align:center;max-width:100%;height:auto;">
+<div style="max-width:45%;display:inline-block;padding:1%">
+   <img src="https://pbs.twimg.com/media/CUvazvXXIAAzGvS.jpg" style="max-width:100%"/>
 </div>
-<div align="center">
-     <img src="https://pbs.twimg.com/media/CUvazuPWUAEnHfc.jpg" style="width:45%;height:auto;" />
-     <img src="https://pbs.twimg.com/media/CUvaz2GXAAAd7Vv.jpg" style="width:45%;height:auto;" />
+<div style="max-width:45%;display:inline-block;padding:1%">
+  <img src="https://pbs.twimg.com/media/CUvazu8WEAE7Szw.jpg" style="max-width:100%"/>
+</div>
+<div style="max-width:45%;display:inline-block;padding:1%">
+  <img src="https://pbs.twimg.com/media/CUvazuPWUAEnHfc.jpg" style="max-width:100%"/>
+</div>
+<div style="max-width:45%;display:inline-block;padding:1%">
+  <img src="https://pbs.twimg.com/media/CUvaz2GXAAAd7Vv.jpg" style="max-width:100%"/>
+</div>
 </div>
 
 * Uses sphere-tracing (raymarching) to find intersections between rays and objects
