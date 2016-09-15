@@ -1,20 +1,9 @@
 # frag-pathtracer
 A (very hacky) path tracer written in a GLSL fragment shader
 
-<div style="text-align:center;max-width:100%;height:auto;">
-<div style="max-width:45%;display:inline-block;padding:1%">
-   <img src="https://pbs.twimg.com/media/CUvazvXXIAAzGvS.jpg" style="max-width:100%"/>
-</div>
-<div style="max-width:45%;display:inline-block;padding:1%">
-  <img src="https://pbs.twimg.com/media/CUvazu8WEAE7Szw.jpg" style="max-width:100%"/>
-</div>
-<div style="max-width:45%;display:inline-block;padding:1%">
-  <img src="https://pbs.twimg.com/media/CUvazuPWUAEnHfc.jpg" style="max-width:100%"/>
-</div>
-<div style="max-width:45%;display:inline-block;padding:1%">
-  <img src="https://pbs.twimg.com/media/CUvaz2GXAAAd7Vv.jpg" style="max-width:100%"/>
-</div>
-</div>
+<p align="center">
+   <img src="https://pbs.twimg.com/media/CUvazvXXIAAzGvS.jpg" />
+</p>
 
 * Uses sphere-tracing (raymarching) to find intersections between rays and objects
 * Supports Lambertian and Blinn-Phong BRDFs.
@@ -48,3 +37,11 @@ scenes/       | Example scene files
 shaders/      | GLSL source code for shaders
 src/          | C/C++ source files
 LEIAME.pdf    | Documentation in PDF format (PT-BR only)
+
+# More Images
+
+<p align="center">
+<img src="https://pbs.twimg.com/media/CUvazu8WEAE7Szw.jpg" />
+<img src="https://pbs.twimg.com/media/CUvazuPWUAEnHfc.jpg" />
+<img src="https://pbs.twimg.com/media/CUvaz2GXAAAd7Vv.jpg" />
+</p>
