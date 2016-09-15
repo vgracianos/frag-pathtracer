@@ -1,12 +1,14 @@
 # frag-pathtracer
 A (very hacky) path tracer written in a GLSL fragment shader
 
-<p align="center">
-   <img src="https://pbs.twimg.com/media/CUvazvXXIAAzGvS.jpg" />
-   <img src="https://pbs.twimg.com/media/CUvazu8WEAE7Szw.jpg" />
-   <img src="https://pbs.twimg.com/media/CUvazuPWUAEnHfc.jpg" />
-   <img src="https://pbs.twimg.com/media/CUvaz2GXAAAd7Vv.jpg" />
-</p>
+<div align="center">
+     <img src="https://pbs.twimg.com/media/CUvazvXXIAAzGvS.jpg" style="width:45%;height:auto;" />
+     <img src="https://pbs.twimg.com/media/CUvazu8WEAE7Szw.jpg" style="width:45%;height:auto;" />
+</div>
+<div align="center">
+     <img src="https://pbs.twimg.com/media/CUvazuPWUAEnHfc.jpg" style="width:45%;height:auto;" />
+     <img src="https://pbs.twimg.com/media/CUvaz2GXAAAd7Vv.jpg" style="width:45%;height:auto;" />
+</div>
 
 * Uses sphere-tracing (raymarching) to find intersections between rays and objects
 * Supports Lambertian and Blinn-Phong BRDFs.
